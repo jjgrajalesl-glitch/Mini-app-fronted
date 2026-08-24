@@ -6,7 +6,7 @@
   <title>Tienda Mini App</title>
   <!-- Telegram SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <!-- Firebase SDK (Compat para single-file sin bundler) -->
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
@@ -35,38 +35,33 @@
   <div id="products-grid" class="grid"></div>
 
   <script>
-    // 1. Configuración de Firebase
+    // Configuración real tomada de tu pantalla
     const firebaseConfig = {
-      apiKey: "TU_API_KEY",
-      authDomain: "TU_PROJECT.firebaseapp.com",
-      projectId: "TU_PROJECT_ID",
-      storageBucket: "TU_PROJECT.appspot.com",
-      messagingSenderId: "123456789",
-      appId: "1:123456789:web:abcde"
+      apiKey: "AIzaSyALopFJpPN6Zgjt4sP5U_UhhYB7hoNANIs",
+      authDomain: "saas-miniapps-prod.firebaseapp.com",
+      projectId: "saas-miniapps-prod",
+      storageBucket: "saas-miniapps-prod.firebasestorage.app",
+      messagingSenderId: "810701987603",
+      appId: "1:810701987603:web:1c74cf63bb35a4730b84e6"
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // 2. Inicializar Telegram SDK
     const tg = window.Telegram.WebApp;
     tg.ready();
     tg.expand();
 
-    // 3. Obtener store_id desde la URL (ej: ?store_id=tienda_1) o parámetro de Telegram
     const urlParams = new URLSearchParams(window.location.search);
     const storeId = urlParams.get('store_id') || tg.initDataUnsafe.start_param || 'demo_store';
 
     let cart = [];
 
-    // 4. Cargar datos de la tienda y productos
     async function loadStore() {
-      // Cargar info de tienda
       const storeDoc = await db.collection('stores').doc(storeId).get();
       if (storeDoc.exists) {
         document.getElementById('store-name').innerText = storeDoc.data().name;
       }
 
-      // Cargar productos
       const snapshot = await db.collection('stores').doc(storeId).collection('products').where('active', '==', true).get();
       const grid = document.getElementById('products-grid');
       grid.innerHTML = '';
@@ -84,7 +79,6 @@
       });
     }
 
-    // 5. Gestión del Carrito mediante MainButton de Telegram
     function addToCart(id, title, price) {
       cart.push({ id, title, price });
       tg.MainButton.text = `VER PEDIDO (${cart.length}) - $${cart.reduce((sum, i) => sum + i.price, 0)} USD`;
@@ -96,7 +90,6 @@
 
       const user = tg.initDataUnsafe.user || { first_name: 'Cliente', id: '0000' };
       
-      // Guardar pedido en Firestore
       await db.collection('stores').doc(storeId).collection('orders').add({
         buyer_name: user.first_name,
         buyer_id: user.id,
