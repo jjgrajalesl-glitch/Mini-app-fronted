@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tienda Mini App</title>
+  <!-- Telegram SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- Firebase SDK (Compat para single-file sin bundler) -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+  <style>
+    :root {
+      --bg: var(--tg-theme-bg-color, #ffffff);
+      --text: var(--tg-theme-text-color, #000000);
+      --btn: var(--tg-theme-button-color, #0088cc);
+      --btn-text: var(--tg-theme-button-text-color, #ffffff);
+    }
+    body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 15px; }
+    .header { text-align: center; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .card { border: 1px solid #eee; border-radius: 10px; padding: 10px; text-align: center; background: #fff; }
+    .card img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; }
+    .price { font-weight: bold; color: green; margin: 8px 0; }
+    button { background: var(--btn); color: var(--btn-text); border: none; padding: 8px 12px; border-radius: 6px; width: 100%; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h2 id="store-name">Cargando tienda...</h2>
+  </div>
+
+  <div id="products-grid" class="grid"></div>
+
+  <script>
+    // 1. Configuración de Firebase
+    const firebaseConfig = {
+      apiKey: "TU_API_KEY",
+      authDomain: "TU_PROJECT.firebaseapp.com",
+      projectId: "TU_PROJECT_ID",
+      storageBucket: "TU_PROJECT.appspot.com",
+      messagingSenderId: "123456789",
+      appId: "1:123456789:web:abcde"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // 2. Inicializar Telegram SDK
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+
+    // 3. Obtener store_id desde la URL (ej: ?store_id=tienda_1) o parámetro de Telegram
+    const urlParams = new URLSearchParams(window.location.search);
+    const storeId = urlParams.get('store_id') || tg.initDataUnsafe.start_param || 'demo_store';
+
+    let cart = [];
+
+    // 4. Cargar datos de la tienda y productos
+    async function loadStore() {
+      // Cargar info de tienda
+      const storeDoc = await db.collection('stores').doc(storeId).get();
+      if (storeDoc.exists) {
+        document.getElementById('store-name').innerText = storeDoc.data().name;
+      }
+
+      // Cargar productos
+      const snapshot = await db.collection('stores').doc(storeId).collection('products').where('active', '==', true).get();
+      const grid = document.getElementById('products-grid');
+      grid.innerHTML = '';
+
+      snapshot.forEach(doc => {
+        const item = doc.data();
+        grid.innerHTML += `
+          <div class="card">
+            <img src="${item.image_url}" alt="${item.title}">
+            <h4>${item.title}</h4>
+            <div class="price">$${item.price} USD</div>
+            <button onclick="addToCart('${doc.id}', '${item.title}', ${item.price})">Agregar</button>
+          </div>
+        `;
+      });
+    }
+
+    // 5. Gestión del Carrito mediante MainButton de Telegram
+    function addToCart(id, title, price) {
+      cart.push({ id, title, price });
+      tg.MainButton.text = `VER PEDIDO (${cart.length}) - $${cart.reduce((sum, i) => sum + i.price, 0)} USD`;
+      tg.MainButton.show();
+    }
+
+    tg.MainButton.onClick(async () => {
+      if (cart.length === 0) return;
+
+      const user = tg.initDataUnsafe.user || { first_name: 'Cliente', id: '0000' };
+      
+      // Guardar pedido en Firestore
+      await db.collection('stores').doc(storeId).collection('orders').add({
+        buyer_name: user.first_name,
+        buyer_id: user.id,
+        items: cart,
+        total: cart.reduce((sum, i) => sum + i.price, 0),
+        status: 'PENDING',
+        created_at: firebase.firestore.FieldValue.ServerValue.timestamp
+      });
+
+      tg.showAlert('¡Pedido enviado con éxito!');
+      tg.close();
+    });
+
+    loadStore();
+  </script>
+</body>
+</html>
