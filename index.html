@@ -24,6 +24,7 @@
     .card img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; }
     .price { font-weight: bold; color: green; margin: 8px 0; }
     button { background: var(--btn); color: var(--btn-text); border: none; padding: 8px 12px; border-radius: 6px; width: 100%; cursor: pointer; }
+    .error-box { color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 12px; border-radius: 8px; text-align: center; margin-bottom: 15px; }
   </style>
 </head>
 <body>
@@ -32,10 +33,10 @@
     <h2 id="store-name">Cargando tienda...</h2>
   </div>
 
+  <div id="error-container"></div>
   <div id="products-grid" class="grid"></div>
 
   <script>
-    // Configuración real tomada de tu pantalla
     const firebaseConfig = {
       apiKey: "AIzaSyALopFJpPN6Zgjt4sP5U_UhhYB7hoNANIs",
       authDomain: "saas-miniapps-prod.firebaseapp.com",
@@ -44,64 +45,77 @@
       messagingSenderId: "810701987603",
       appId: "1:810701987603:web:1c74cf63bb35a4730b84e6"
     };
-    firebase.initializeApp(firebaseConfig);
+
+    try {
+      firebase.initializeApp(firebaseConfig);
+    } catch(e) {
+      showError("Error al inicializar Firebase: " + e.message);
+    }
+
     const db = firebase.firestore();
 
-    const tg = window.Telegram.WebApp;
-    tg.ready();
-    tg.expand();
+    const tg = window.Telegram ? window.Telegram.WebApp : null;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
 
     const urlParams = new URLSearchParams(window.location.search);
-    const storeId = urlParams.get('store_id') || tg.initDataUnsafe.start_param || 'demo_store';
+    const storeId = urlParams.get('store_id') || (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || 'demo_store';
 
     let cart = [];
 
+    function showError(msg) {
+      document.getElementById('error-container').innerHTML = `<div class="error-box">${msg}</div>`;
+    }
+
     async function loadStore() {
-      const storeDoc = await db.collection('stores').doc(storeId).get();
-      if (storeDoc.exists) {
-        document.getElementById('store-name').innerText = storeDoc.data().name;
+      try {
+        const storeDoc = await db.collection('stores').doc(storeId).get();
+        
+        if (!storeDoc.exists) {
+          document.getElementById('store-name').innerText = "Tienda No Encontrada";
+          showError(`No existe el documento "${storeId}" en Firestore. Revisa que en la colección "stores" el ID sea exactamente "demo_store".`);
+          return;
+        }
+
+        document.getElementById('store-name').innerText = storeDoc.data().name || "Mi Tienda";
+
+        const snapshot = await db.collection('stores').doc(storeId).collection('products').get();
+        const grid = document.getElementById('products-grid');
+        grid.innerHTML = '';
+
+        if (snapshot.empty) {
+          showError("La tienda no tiene productos guardados aún.");
+          return;
+        }
+
+        snapshot.forEach(doc => {
+          const item = doc.data();
+          grid.innerHTML += `
+            <div class="card">
+              <img src="${item.image_url || 'https://via.placeholder.com/150'}" alt="${item.title}">
+              <h4>${item.title || 'Producto'}</h4>
+              <div class="price">$${item.price || 0} USD</div>
+              <button onclick="addToCart('${doc.id}', '${item.title}', ${item.price})">Agregar</button>
+            </div>
+          `;
+        });
+      } catch (err) {
+        document.getElementById('store-name').innerText = "Error de Conexión";
+        showError("Error de Firestore: " + err.message);
       }
-
-      const snapshot = await db.collection('stores').doc(storeId).collection('products').where('active', '==', true).get();
-      const grid = document.getElementById('products-grid');
-      grid.innerHTML = '';
-
-      snapshot.forEach(doc => {
-        const item = doc.data();
-        grid.innerHTML += `
-          <div class="card">
-            <img src="${item.image_url}" alt="${item.title}">
-            <h4>${item.title}</h4>
-            <div class="price">$${item.price} USD</div>
-            <button onclick="addToCart('${doc.id}', '${item.title}', ${item.price})">Agregar</button>
-          </div>
-        `;
-      });
     }
 
     function addToCart(id, title, price) {
       cart.push({ id, title, price });
-      tg.MainButton.text = `VER PEDIDO (${cart.length}) - $${cart.reduce((sum, i) => sum + i.price, 0)} USD`;
-      tg.MainButton.show();
+      if (tg && tg.MainButton) {
+        tg.MainButton.text = `VER PEDIDO (${cart.length}) - $${cart.reduce((sum, i) => sum + i.price, 0)} USD`;
+        tg.MainButton.show();
+      } else {
+        alert(`Producto agregado al carrito. Total: $${cart.reduce((sum, i) => sum + i.price, 0)} USD`);
+      }
     }
-
-    tg.MainButton.onClick(async () => {
-      if (cart.length === 0) return;
-
-      const user = tg.initDataUnsafe.user || { first_name: 'Cliente', id: '0000' };
-      
-      await db.collection('stores').doc(storeId).collection('orders').add({
-        buyer_name: user.first_name,
-        buyer_id: user.id,
-        items: cart,
-        total: cart.reduce((sum, i) => sum + i.price, 0),
-        status: 'PENDING',
-        created_at: firebase.firestore.FieldValue.ServerValue.timestamp
-      });
-
-      tg.showAlert('¡Pedido enviado con éxito!');
-      tg.close();
-    });
 
     loadStore();
   </script>
