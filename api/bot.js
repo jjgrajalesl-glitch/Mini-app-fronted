@@ -8,34 +8,33 @@ export default async function handler(req, res) {
   const text = body.message.text ? body.message.text.trim() : '';
   const BOT_TOKEN = "8845435445:AAFaH--63UOWdUUsgkU_vsuCV-mglOZnWfA";
   const PROJECT_ID = "saas-miniapps-prod";
+  const storeId = `store${chatId}`; // ID limpio sin guiones ni subrayados
 
   async function sendMessage(messageText) {
     await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: messageText, parse_mode: 'Markdown' })
+      body: JSON.stringify({ chat_id: chatId, text: messageText })
     });
   }
 
   // 1. Comando /start
   if (text === '/start') {
     await sendMessage(
-      "🚀 *¡Bienvenido a tu Gestor de Mini App!*\n\n" +
-      "📌 *Paso 1:* Envía el nombre de tu tienda (Ej: `Moda Express`).\n\n" +
-      "📌 *Paso 2:* Para agregar productos, envíalos en este formato (uno por línea):\n" +
-      "`Nombre del Producto, Precio`\n\n" +
+      "🚀 ¡Bienvenido al Creador de Tiendas!\n\n" +
+      "📌 Paso 1: Envía el nombre de tu tienda (Ej: Moda VIP).\n\n" +
+      "📌 Paso 2: Envía tus productos en este formato:\n" +
+      "Nombre, Precio\n\n" +
       "Ejemplo:\n" +
-      "`Vestido Elegante, 45`\n" +
-      "`Zapatos de Cuero, 80`\n" +
-      "`Bolso Negro, 35`"
+      "Camiseta Negra, 20\n" +
+      "Zapatos Deportivos, 50"
     );
     return res.status(200).send('OK');
   }
 
-  // 2. Si el texto contiene comas, se procesa como carga de productos
+  // 2. Carga de productos (si contiene coma)
   if (text.includes(',')) {
     const lines = text.split('\n');
-    const storeId = `store-${chatId}`; // Asocia los productos al ID del usuario
     let addedCount = 0;
 
     for (const line of lines) {
@@ -65,15 +64,14 @@ export default async function handler(req, res) {
 
     const appUrl = `https://mini-app-fronted.vercel.app/?store_id=${storeId}`;
     await sendMessage(
-      `✅ *¡Se agregaron ${addedCount} productos con éxito!*\n\n` +
-      `🔗 *Ver tu tienda actualizada:*\n${appUrl}`
+      `✅ ¡Se agregaron ${addedCount} productos con éxito!\n\n` +
+      `🔗 Ver tu tienda:\n${appUrl}`
     );
     return res.status(200).send('OK');
   }
 
-  // 3. Si no tiene comas, se asume que es la creación del nombre de la tienda
+  // 3. Crear/Actualizar nombre de tienda
   const storeName = text;
-  const storeId = `store-${chatId}`;
   const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/stores/${storeId}`;
 
   await fetch(firestoreUrl, {
@@ -90,11 +88,9 @@ export default async function handler(req, res) {
 
   const appUrl = `https://mini-app-fronted.vercel.app/?store_id=${storeId}`;
   await sendMessage(
-    `✅ *¡Tienda "${storeName}" activada!*\n\n` +
-    `🔗 *Tu enlace:*\n${appUrl}\n\n` +
-    `📦 *Ahora envía tus productos:* Escribe en el chat la lista de productos separados por coma.\n\n` +
-    `Ejemplo:\n` +
-    "`Camiseta Azul, 25`\n`Pantalón Jean, 50`"
+    `✅ ¡Tienda "${storeName}" activada!\n\n` +
+    `🔗 Tu enlace:\n${appUrl}\n\n` +
+    `📦 Ahora envía tus productos en el chat.`
   );
 
   return res.status(200).send('OK');
