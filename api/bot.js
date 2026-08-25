@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   const text = body.message.text ? body.message.text.trim() : '';
   const BOT_TOKEN = "8845435445:AAFaH--63UOWdUUsgkU_vsuCV-mglOZnWfA";
   const PROJECT_ID = "saas-miniapps-prod";
-  const storeId = `store${chatId}`; // ID limpio sin guiones ni subrayados
+  const storeId = `store${chatId}`;
 
   async function sendMessage(messageText) {
     await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
     return res.status(200).send('OK');
   }
 
-  // 2. Carga de productos (si contiene coma)
+  // 2. Carga de productos (si el texto contiene comas)
   if (text.includes(',')) {
     const lines = text.split('\n');
     let addedCount = 0;
@@ -70,10 +70,20 @@ export default async function handler(req, res) {
     return res.status(200).send('OK');
   }
 
-  // 3. Crear/Actualizar nombre de tienda
+  // 3. Crear/Renombrar tienda y LIMPIAR productos antiguos
   const storeName = text;
   const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/stores/${storeId}`;
 
+  // Eliminar productos anteriores
+  const productsUrl = `${firestoreUrl}/products`;
+  const existingProducts = await fetch(productsUrl).then(r => r.json());
+  if (existingProducts.documents) {
+    for (const doc of existingProducts.documents) {
+      await fetch(`https://firestore.googleapis.com/v1/${doc.name}`, { method: 'DELETE' });
+    }
+  }
+
+  // Guardar nuevo nombre de tienda
   await fetch(firestoreUrl, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -88,9 +98,9 @@ export default async function handler(req, res) {
 
   const appUrl = `https://mini-app-fronted.vercel.app/?store_id=${storeId}`;
   await sendMessage(
-    `✅ ¡Tienda "${storeName}" activada!\n\n` +
+    `✅ ¡Tienda "${storeName}" activada en blanco!\n\n` +
     `🔗 Tu enlace:\n${appUrl}\n\n` +
-    `📦 Ahora envía tus productos en el chat.`
+    `📦 Ahora envía tus nuevos productos en el chat.`
   );
 
   return res.status(200).send('OK');
