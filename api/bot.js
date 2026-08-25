@@ -1,4 +1,4 @@
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     return res.status(200).send('Bot activo');
   }
@@ -24,18 +24,15 @@ export default async function handler(req, res) {
     });
   }
 
-  // Comando /start
   if (text === '/start') {
     await sendMessage("🚀 *¡Bienvenido al Creador de Tiendas!*\n\nEscribe el nombre de tu tienda para activarla en 5 segundos:");
     return res.status(200).send('OK');
   }
 
-  // Procesar creación de tienda
   if (text) {
     const storeName = text;
     const storeId = storeName.toLowerCase().replace(/[^a-z0-9]/g, '_');
 
-    // Crear tienda en Firestore vía API REST
     const firestoreUrl = `https://firestore.googleapis.com/v1/projects/saas-miniapps-prod/databases/(default)/documents/stores/${storeId}`;
     
     await fetch(firestoreUrl, {
@@ -50,7 +47,6 @@ export default async function handler(req, res) {
       })
     });
 
-    // Crear producto inicial de prueba
     const productUrl = `${firestoreUrl}/products`;
     await fetch(productUrl, {
       method: 'POST',
@@ -75,4 +71,4 @@ export default async function handler(req, res) {
   }
 
   return res.status(200).send('OK');
-}
+};
