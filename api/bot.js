@@ -35,7 +35,7 @@ export default async function handler(req, res) {
   // 2. Si el texto contiene comas, se procesa como carga de productos
   if (text.includes(',')) {
     const lines = text.split('\n');
-    const storeId = `store_${chatId}`; // Asocia los productos al ID del usuario
+    const storeId = `store-${chatId}`; // Asocia los productos al ID del usuario
     let addedCount = 0;
 
     for (const line of lines) {
@@ -73,7 +73,7 @@ export default async function handler(req, res) {
 
   // 3. Si no tiene comas, se asume que es la creación del nombre de la tienda
   const storeName = text;
-  const storeId = `store_${chatId}`;
+  const storeId = `store-${chatId}`;
   const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/stores/${storeId}`;
 
   await fetch(firestoreUrl, {
