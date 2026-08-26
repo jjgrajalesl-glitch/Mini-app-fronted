@@ -18,7 +18,7 @@ export default async function handler(req, res) {
   }
 
   async function sendEmailOTP(toEmail, otpCode) {
-    if (!RESEND_API_KEY) return false;
+    if (!RESEND_API_KEY) return { ok: false, error: "Falta RESEND_API_KEY" };
     try {
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -29,14 +29,14 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           from: 'SaaS Bot <onboarding@resend.dev>',
           to: [toEmail],
-          subject: 'Código de Verificación de tu Tienda Mini App',
+          subject: 'Código de Verificación - Mini App',
           html: `<p>Tu código de verificación es: <strong>${otpCode}</strong></p>`
         })
       });
-      return res.ok;
+      const data = await res.json();
+      return { ok: res.ok, data };
     } catch (e) {
-      console.error("Error al enviar email:", e);
-      return false;
+      return { ok: false, error: e.message };
     }
   }
 
@@ -103,18 +103,28 @@ export default async function handler(req, res) {
       step: 'AWAITING_OTP'
     });
 
-    await sendEmailOTP(text, generatedOtp);
+    const emailResult = await sendEmailOTP(text, generatedOtp);
 
-    await sendMessage(
-      chatId,
-      `📩 *Verificación enviada a tu Correo*\n\n` +
-      `Hemos enviado un código de seguridad de 4 dígitos a \`${text}\`.\n\n` +
-      `Por favor revisa tu bandeja de entrada e *ingresa el código de 4 dígitos aquí en el chat*:`
-    );
+    if (emailResult.ok) {
+      await sendMessage(
+        chatId,
+        `📩 *Verificación enviada a tu Correo*\n\n` +
+        `Hemos enviado el código de 4 dígitos a \`${text}\`.\n` +
+        `_(Revisa tu bandeja de Spam / Correo no deseado)._\n\n` +
+        `Ingresa el código de 4 dígitos aquí:`
+      );
+    } else {
+      await sendMessage(
+        chatId,
+        `⚠️ *Aviso de envío:* El servicio de correo no entregó a \`${text}\`.\n` +
+        `🔐 *Tu Código de prueba es:* \`${generatedOtp}\`\n\n` +
+        `Ingresa los 4 dígitos aquí para continuar:`
+      );
+    }
     return res.status(200).send('OK');
   }
 
-  // Validar Código Ingresado
+  // Validar OTP
   if (clientData.step === 'AWAITING_OTP') {
     if (text === clientData.otp) {
       await updateClient(clientId, { step: 'AWAITING_PHONE' });
@@ -123,7 +133,7 @@ export default async function handler(req, res) {
         `✅ *Correo verificado correctamente.*\n\n📱 Envía tu *Número de Teléfono / WhatsApp*:`
       );
     } else {
-      await sendMessage(chatId, `❌ *Código incorrecto.* Ingrese los 4 dígitos enviados a su correo:`);
+      await sendMessage(chatId, `❌ *Código incorrecto.* Ingrese los 4 dígitos enviados:`);
     }
     return res.status(200).send('OK');
   }
@@ -134,7 +144,21 @@ export default async function handler(req, res) {
     return res.status(200).send('OK');
   }
 
+  // Configurar Nombre de Tienda y LIMPIAR catálogo anterior
   if (clientData.step === 'AWAITING_STORE_NAME') {
+    // 1. Eliminar productos previos de Firestore para iniciar desde cero
+    const oldProductsUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/stores/${storeId}/products`;
+    const oldDocsRes = await fetch(oldProductsUrl);
+    if (oldDocsRes.ok) {
+      const oldDocsData = await oldDocsRes.json();
+      if (oldDocsData.documents) {
+        for (const doc of oldDocsData.documents) {
+          await fetch(`https://firestore.googleapis.com/v1/${doc.name}`, { method: 'DELETE' });
+        }
+      }
+    }
+
+    // 2. Guardar nueva configuración de tienda
     const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/stores/${storeId}`;
     await fetch(firestoreUrl, {
       method: 'PATCH',
@@ -149,11 +173,12 @@ export default async function handler(req, res) {
       })
     });
 
-    await updateClient(clientId, { step: 'AWAITING_PRODUCT' });
-    await sendMessage(chatId, `📦 *Paso 2:* Envía tu producto en formato: \`Nombre, Precio\``);
+    await updateClient(clientId, { store_name: text, step: 'AWAITING_PRODUCT' });
+    await sendMessage(chatId, `✅ *Tienda "${text}" configurada en blanco.*\n\n📦 *Paso 2:* Envía tu producto en formato: \`Nombre, Precio\``);
     return res.status(200).send('OK');
   }
 
+  // Carga de producto
   if (clientData.step === 'AWAITING_PRODUCT' || text.includes(',')) {
     if (text.includes(',')) {
       const parts = text.split(',');
