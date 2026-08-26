@@ -2,7 +2,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(200).send('Bot activo');
 
   const body = req.body;
-  const BOT_TOKEN = "8845435445:AAFaH--63UOWdUUsgkU_vsuCV-mglOZnWfA";
+  const BOT_TOKEN = process.env.BOT_TOKEN;
   const PROJECT_ID = "saas-miniapps-prod";
 
   async function sendMessage(chatId, text, keyboard = null) {
