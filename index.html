@@ -36,88 +36,88 @@
   <div id="error-container"></div>
   <div id="products-grid" class="grid"></div>
 
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyALopFJpPN6Zgjt4sP5U_UhhYB7hoNANIs",
-      authDomain: "saas-miniapps-prod.firebaseapp.com",
-      projectId: "saas-miniapps-prod",
-      storageBucket: "saas-miniapps-prod.firebasestorage.app",
-      messagingSenderId: "810701987603",
-      appId: "1:810701987603:web:1c74cf63bb35a4730b84e6"
-    };
-
-    try {
-      firebase.initializeApp(firebaseConfig);
-    } catch(e) {
-      showError("Error al inicializar Firebase: " + e.message);
-    }
-
-    const db = firebase.firestore();
-
+<script>
+    // Configuración Telegram WebApp
     const tg = window.Telegram ? window.Telegram.WebApp : null;
-    if (tg) {
-      tg.ready();
-      tg.expand();
-    }
+    if (tg) tg.expand();
 
+    // Obtener Parámetros de la URL
     const urlParams = new URLSearchParams(window.location.search);
-    const storeId = urlParams.get('store_id') || (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) || 'demo_store';
+    const storeId = urlParams.get('store_id') || urlParams.get('storeid') || 'demo_store';
+    const PROJECT_ID = 'saas-miniapps-prod';
 
     let cart = [];
 
-    function showError(msg) {
-      document.getElementById('error-container').innerHTML = `<div class="error-box">${msg}</div>`;
-    }
-
+    // Cargar Tienda y Productos desde Firestore REST API
     async function loadStore() {
       try {
-        const storeDoc = await db.collection('stores').doc(storeId).get();
+        const storeRes = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/stores/${storeId}`);
+        const storeData = await storeRes.json();
         
-        if (!storeDoc.exists) {
-          document.getElementById('store-name').innerText = "Tienda No Encontrada";
-          showError(`No existe el documento "${storeId}" en Firestore. Revisa que en la colección "stores" el ID sea exactamente "demo_store".`);
+        if (storeData.fields && storeData.fields.name) {
+          document.getElementById('store-name').innerText = storeData.fields.name.stringValue;
+        }
+
+        const productsRes = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/stores/${storeId}/products`);
+        const productsData = await productsRes.json();
+
+        const container = document.getElementById('products-grid') || document.getElementById('products-container');
+        if (container) container.innerHTML = '';
+
+        if (!productsData.documents || productsData.documents.length === 0) {
+          if (container) container.innerHTML = '<p style="grid-column:1/-1;text-align:center;">Esta tienda no tiene productos guardados aún.</p>';
           return;
         }
 
-        document.getElementById('store-name').innerText = storeDoc.data().name || "Mi Tienda";
+        productsData.documents.forEach(doc => {
+          const p = doc.fields;
+          const title = p.title ? p.title.stringValue : 'Producto';
+          const price = p.price ? (p.price.doubleValue || p.price.integerValue) : 0;
+          const image = p.image_url ? p.image_url.stringValue : 'https://via.placeholder.com/150';
 
-        const snapshot = await db.collection('stores').doc(storeId).collection('products').get();
-        const grid = document.getElementById('products-grid');
-        grid.innerHTML = '';
-
-        if (snapshot.empty) {
-          showError("La tienda no tiene productos guardados aún.");
-          return;
-        }
-
-        snapshot.forEach(doc => {
-          const item = doc.data();
-          grid.innerHTML += `
-            <div class="card">
-              <img src="${item.image_url || 'https://via.placeholder.com/150'}" alt="${item.title}">
-              <h4>${item.title || 'Producto'}</h4>
-              <div class="price">$${item.price || 0} USD</div>
-              <button onclick="addToCart('${doc.id}', '${item.title}', ${item.price})">Agregar</button>
-            </div>
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML = `
+            <img src="${image}" alt="${title}">
+            <h4>${title}</h4>
+            <div class="price">$${price} USD</div>
+            <button onclick="addToCart('${title}', ${price})">Agregar</button>
           `;
+          if (container) container.appendChild(card);
         });
       } catch (err) {
-        document.getElementById('store-name').innerText = "Error de Conexión";
-        showError("Error de Firestore: " + err.message);
+        console.error(err);
       }
     }
 
-    function addToCart(id, title, price) {
-      cart.push({ id, title, price });
+    function addToCart(title, price) {
+      cart.push({ title, price });
       if (tg && tg.MainButton) {
-        tg.MainButton.text = `VER PEDIDO (${cart.length}) - $${cart.reduce((sum, i) => sum + i.price, 0)} USD`;
+        tg.MainButton.setText(`VER PEDIDO (${cart.length}) - $${cart.reduce((a,b)=>a+b.price,0)} USD`);
         tg.MainButton.show();
       } else {
-        alert(`Producto agregado al carrito. Total: $${cart.reduce((sum, i) => sum + i.price, 0)} USD`);
+        alert(`Añadido: ${title} - Total: $${cart.reduce((a,b)=>a+b.price,0)} USD`);
       }
+    }
+
+    // Handler de Cierre de Compra (Checkout)
+    if (tg && tg.MainButton) {
+      tg.MainButton.onClick(async () => {
+        const total = cart.reduce((a,b)=>a+b.price, 0);
+        const orderData = {
+          store_id: storeId,
+          items: cart.map(i => i.title).join(', '),
+          total: total,
+          user_name: tg.initDataUnsafe?.user?.first_name || 'Cliente'
+        };
+
+        tg.sendData(JSON.stringify(orderData));
+        tg.close();
+      });
     }
 
     loadStore();
   </script>
+  
 </body>
 </html>
