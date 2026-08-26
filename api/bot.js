@@ -24,20 +24,20 @@ export default async function handler(req, res) {
     });
   }
 
-  // Funciones de Base de Datos (Firestore REST)
+  // Funciones de Firestore REST
   async function getClient(clientId) {
-    const res = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/clients/${clientId}`);
-    if (res.status === 200) {
-      const data = await res.json();
-      const fields = data.fields || {};
-      return {
-        step: fields.step ? fields.step.stringValue : null,
-        owner_name: fields.owner_name ? fields.owner_name.stringValue : '',
-        person_type: fields.person_type ? fields.person_type.stringValue : '',
-        email: fields.email ? fields.email.stringValue : '',
-        phone: fields.phone ? fields.phone.stringValue : ''
-      };
-    }
+    try {
+      const res = await fetch(`https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/clients/${clientId}`);
+      if (res.status === 200) {
+        const data = await res.json();
+        const fields = data.fields || {};
+        return {
+          step: fields.step ? fields.step.stringValue : null,
+          email: fields.email ? fields.email.stringValue : '',
+          store_name: fields.store_name ? fields.store_name.stringValue : ''
+        };
+      }
+    } catch (e) { console.error(e); }
     return null;
   }
 
@@ -53,7 +53,7 @@ export default async function handler(req, res) {
     });
   }
 
-  // 1. MANEJO DE BOTONES INTERACTIVOS (CALLBACKS)
+  // 1. MANEJO DE BOTONES (CALLBACKS)
   if (body && body.callback_query) {
     const callback = body.callback_query;
     const chatId = callback.message.chat.id;
@@ -68,12 +68,9 @@ export default async function handler(req, res) {
       };
       await sendMessage(
         chatId,
-        `ℹ️ *Información del Servicio SaaS Mini Apps*\n\n` +
-        `Crea tu tienda virtual dentro de Telegram en menos de 2 minutos.\n` +
-        `• Catálogo interactivo de productos.\n` +
-        `• Alertas instantáneas de pedidos recibidos.\n` +
-        `• Control de estados de despacho y entregas.\n\n` +
-        `Haz clic abajo para crear tu usuario.`,
+        `ℹ️ *Plataforma SaaS de Mini Apps en Telegram*\n\n` +
+        `Crea tu tienda virtual interactiva con catálogo de productos y recepción de pedidos al instante.\n\n` +
+        `Haz clic abajo para iniciar tu registro.`,
         keyboard
       );
       return res.status(200).send('OK');
@@ -88,7 +85,7 @@ export default async function handler(req, res) {
     if (data === 'type_pn' || data === 'type_pj') {
       const pType = data === 'type_pn' ? 'Persona Natural (PN)' : 'Persona Jurídica (PJ)';
       await updateClient(clientId, { person_type: pType, step: 'AWAITING_EMAIL' });
-      await sendMessage(chatId, `✅ Registrado: *${pType}*\n\n✉️ Ahora envía tu *Correo Electrónico*:`);
+      await sendMessage(chatId, `✅ Registrado: *${pType}*\n\n✉️ Envía tu *Correo Electrónico*:`);
       return res.status(200).send('OK');
     }
 
@@ -132,7 +129,7 @@ export default async function handler(req, res) {
     return res.status(200).send('OK');
   }
 
-  // 3. COMANDO /START O MENÚ INICIAL
+  // 3. EVALUAR CLIENTE
   const clientData = await getClient(clientId);
 
   if (text === '/start' || !clientData || !clientData.step) {
@@ -151,7 +148,7 @@ export default async function handler(req, res) {
     return res.status(200).send('OK');
   }
 
-  // 4. FLUJO PASO A PASO DE CAPTURA DE DATOS
+  // 4. FLUJO PASO A PASO DE REGISTRO
   if (clientData.step === 'AWAITING_NAME') {
     await updateClient(clientId, { owner_name: text, step: 'AWAITING_TYPE' });
     const keyboard = {
@@ -173,23 +170,48 @@ export default async function handler(req, res) {
   if (clientData.step === 'AWAITING_PHONE') {
     await updateClient(clientId, {
       phone: text,
-      step: 'ACTIVE',
+      step: 'AWAITING_STORE_NAME',
       plan: 'Free',
       created_at: new Date().toISOString()
     });
 
     await sendMessage(
       chatId,
-      `🎉 *¡Registro completado exitosamente!*\n\n` +
+      `📧 *Inscripción aceptada:* Se ha registrado la confirmación para el correo \`${clientData.email}\`.\n\n` +
       `🆔 *Tu ID Único de Cliente:* \`${clientId}\`\n\n` +
-      `📌 *Paso 1:* Envía el nombre de tu tienda (Ej: \`Moda VIP\`)\n` +
-      `📌 *Paso 2:* Carga tu producto en formato: \`Nombre, Precio\``
+      `🏪 *Paso 1:* Envía ahora el *Nombre de tu Tienda* (Ej: \`Tienda de Juan\`):`
     );
     return res.status(200).send('OK');
   }
 
-  // 5. USUARIO ACTIVO (Creación de Productos / Tienda)
-  if (clientData.step === 'ACTIVE') {
+  // 5. CREACIÓN DE TIENDA Y CATÁLOGO
+  if (clientData.step === 'AWAITING_STORE_NAME') {
+    const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/stores/${storeId}`;
+    await fetch(firestoreUrl, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fields: {
+          name: { stringValue: text },
+          client_id: { stringValue: clientId },
+          active: { booleanValue: true }
+        }
+      })
+    });
+
+    await updateClient(clientId, { store_name: text, step: 'AWAITING_FIRST_PRODUCT' });
+
+    await sendMessage(
+      chatId,
+      `✅ *Tienda "${text}" configurada con éxito.*\n\n` +
+      `📦 *Paso 2:* Ahora envía tu primer producto en formato: \`Nombre, Precio\`\n\n` +
+      `Ejemplo: \`Camisa, 20\``
+    );
+    return res.status(200).send('OK');
+  }
+
+  // 6. CARGA DE PRODUCTOS Y MENSAJE DE CELEBRACIÓN
+  if (clientData.step === 'AWAITING_FIRST_PRODUCT' || clientData.step === 'READY' || text.includes(',')) {
     if (text.includes(',')) {
       const parts = text.split(',');
       const title = parts[0].trim();
@@ -210,37 +232,23 @@ export default async function handler(req, res) {
           })
         });
 
+        await updateClient(clientId, { step: 'READY' });
         const appUrl = `https://mini-app-fronted.vercel.app/?store_id=${storeId}`;
+        
+        const keyboard = {
+          inline_keyboard: [[{ text: "🛒 Validar Tienda y Catálogo", url: appUrl }]]
+        };
+
         await sendMessage(
           chatId,
-          `✅ *Producto agregado:* ${title} ($${price} USD)\n\n` +
-          `🔗 *Ver Tienda:* ${appUrl}`
+          `🎉 *¡Felicitaciones! Ya creaste tu tienda y tu catálogo de productos.*\n\n` +
+          `📌 *Producto registrado:* ${title} ($${price} USD)\n\n` +
+          `👇 Para validar y ver tu tienda en vivo, da clic en el botón de abajo:`,
+          keyboard
         );
       }
       return res.status(200).send('OK');
     }
-
-    // Definir/actualizar nombre de la tienda
-    const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/stores/${storeId}`;
-    await fetch(firestoreUrl, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fields: {
-          name: { stringValue: text },
-          client_id: { stringValue: clientId },
-          active: { booleanValue: true }
-        }
-      })
-    });
-
-    const appUrl = `https://mini-app-fronted.vercel.app/?store_id=${storeId}`;
-    await sendMessage(
-      chatId,
-      `✅ *Tienda "${text}" activada!*\n\n` +
-      `🔗 *Enlace:* ${appUrl}\n\n` +
-      `📦 Envía tu producto en formato: \`Nombre, Precio\``
-    );
   }
 
   return res.status(200).send('OK');
