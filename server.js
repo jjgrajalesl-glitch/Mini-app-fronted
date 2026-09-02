@@ -4,21 +4,73 @@ const crypto = require('crypto');
 const app = express();
 app.use(express.json());
 
-// Habilitar política CORS para permitir peticiones desde cualquier origen/navegador
+// Permite peticiones desde cualquier origen
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
   res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, content-type, Authorization');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
   next();
 });
 
 const DODO_API_KEY = process.env.DODO_PAYMENTS_API_KEY || '';
 const DODO_WEBHOOK_SECRET = process.env.DODO_WEBHOOK_SECRET || '';
-const DODO_API_URL = 'https://live.dodopayments.com/v1';
+// Cambiado a test para coincidir con tu panel en Sandbox
+const DODO_API_URL = process.env.DODO_API_URL || 'https://test.dodopayments.com/v1';
 
+// Panel de prueba visual (Misma IP, Cero errores de CORS o Consola)
+app.get('/', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <title>Probador de Facturas - Dodo</title>
+      <style>
+        body { font-family: system-ui, sans-serif; padding: 40px; background: #0f172a; color: #fff; text-align: center; }
+        .card { background: #1e293b; padding: 30px; border-radius: 12px; max-width: 500px; margin: 0 auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        button { background: #6366f1; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:hover { background: #4f46e5; }
+        #result { margin-top: 20px; text-align: left; background: #0f172a; padding: 15px; border-radius: 8px; font-size: 13px; overflow-x: auto; }
+        a.pay-btn { display: inline-block; margin-top: 15px; background: #22c55e; color: white; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <h2>Servidor de Facturación Activo 🚀</h2>
+        <p>Haz clic para generar una factura de prueba ($199 USD):</p>
+        <button onclick="generarFactura()">Generar Factura de Prueba</button>
+        <div id="payLinkArea"></div>
+        <pre id="result">Esperando interacción...</pre>
+      </div>
+      <script>
+        async function generarFactura() {
+          const resBox = document.getElementById('result');
+          const payArea = document.getElementById('payLinkArea');
+          resBox.innerText = 'Conectando con Dodo Payments...';
+          payArea.innerHTML = '';
+          try {
+            const res = await fetch('/api/crear-factura', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ clienteEmail: 'cliente@prueba.com', clienteNombre: 'Cliente Demo', monto: 199 })
+            });
+            const data = await res.json();
+            resBox.innerText = JSON.stringify(data, null, 2);
+            if (data.urlPago) {
+              payArea.innerHTML = '<a class="pay-btn" href="' + data.urlPago + '" target="_blank">👉 IR A PAGAR AHORA</a>';
+            }
+          } catch (e) {
+            resBox.innerText = 'Error: ' + e.message;
+          }
+        }
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+// Endpoint de creación de facturas
 app.post('/api/crear-factura', async (req, res) => {
   try {
     const { clienteEmail, clienteNombre, monto, productoId } = req.body;
@@ -59,10 +111,16 @@ app.post('/api/crear-factura', async (req, res) => {
       body: JSON.stringify(payload)
     });
 
-    const data = await response.json();
+    const rawText = await response.text();
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch (e) {
+      throw new Error(`Respuesta inválida de Dodo (${response.status}): ${rawText.slice(0, 100)}`);
+    }
 
     if (!response.ok) {
-      throw new Error(data.message || 'Error en Dodo API');
+      throw new Error(data.message || data.error || 'Error procesando solicitud en Dodo');
     }
 
     return res.status(200).json({
@@ -76,6 +134,7 @@ app.post('/api/crear-factura', async (req, res) => {
   }
 });
 
+// Endpoint Webhook
 app.post('/webhook/dodo', (req, res) => {
   const signature = req.headers['x-dodo-signature'];
 
