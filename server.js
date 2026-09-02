@@ -84,5 +84,4 @@ app.post('/webhook/dodo', (req, res) => {
   res.status(200).json({ received: true });
 });
 
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`Servidor activo en puerto ${PORT}`));
+module.exports = app;
