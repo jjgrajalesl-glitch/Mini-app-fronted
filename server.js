@@ -15,10 +15,10 @@ app.use((req, res, next) => {
 
 const DODO_API_KEY = process.env.DODO_PAYMENTS_API_KEY || '';
 const DODO_WEBHOOK_SECRET = process.env.DODO_WEBHOOK_SECRET || '';
-// Cambiado a test para coincidir con tu panel en Sandbox
-const DODO_API_URL = process.env.DODO_API_URL || 'https://test.dodopayments.com/v1';
+// URL base oficial de Dodo Payments
+const DODO_API_URL = process.env.DODO_API_URL || 'https://test.dodopayments.com';
 
-// Panel de prueba visual (Misma IP, Cero errores de CORS o Consola)
+// Panel de prueba visual
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -106,7 +106,8 @@ app.post('/api/crear-factura', async (req, res) => {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${DODO_API_KEY}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       },
       body: JSON.stringify(payload)
     });
