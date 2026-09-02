@@ -93,7 +93,7 @@ app.post('/api/crear-factura', async (req, res) => {
       },
       product_cart: [
         {
-          product_id: productoId || 'prod_default',
+          product_id: productoId || 'pdt_0NmlIexPnNEYXGl5U2Mqj',
           quantity: 1,
           amount: Math.round(monto * 100)
         }
