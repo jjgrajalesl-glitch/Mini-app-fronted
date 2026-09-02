@@ -4,6 +4,17 @@ const crypto = require('crypto');
 const app = express();
 app.use(express.json());
 
+// Habilitar política CORS para permitir peticiones desde cualquier origen/navegador
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
+  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, content-type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 const DODO_API_KEY = process.env.DODO_PAYMENTS_API_KEY || '';
 const DODO_WEBHOOK_SECRET = process.env.DODO_WEBHOOK_SECRET || '';
 const DODO_API_URL = 'https://live.dodopayments.com/v1';
