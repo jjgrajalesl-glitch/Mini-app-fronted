@@ -45,17 +45,6 @@ async function autoCrearProductoDodo(concepto, monto) {
 
   if (!res.ok) throw new Error(data.message || data.error || 'No se pudo crear el producto');
   return data.product_id || data.id;
-})
-  });
-
-  const raw = await res.text();
-  let data;
-  try { data = JSON.parse(raw); } catch (e) {
-    throw new Error(`Error creando producto automático: ${raw.slice(0, 100)}`);
-  }
-
-  if (!res.ok) throw new Error(data.message || 'No se pudo crear el producto automáticamente');
-  return data.product_id || data.id;
 }
 
 // Endpoint Principal de Facturación
@@ -68,8 +57,6 @@ app.post('/api/crear-factura', async (req, res) => {
     }
 
     let idProductoFinal = productoId;
-
-    // Si la Holding no pasa un ID previo, el servidor crea el producto en Dodo en tiempo real
     if (!idProductoFinal) {
       idProductoFinal = await autoCrearProductoDodo(concepto || 'Factura Automática Holding', monto);
     }
@@ -86,12 +73,12 @@ app.post('/api/crear-factura', async (req, res) => {
         email: clienteEmail,
         name: clienteNombre || 'Cliente Holding'
       },
-  product_cart: [
-  {
-    product_id: idProductoFinal,
-    quantity: 1
-  }
-],
+      product_cart: [
+        {
+          product_id: idProductoFinal,
+          quantity: 1
+        }
+      ],
       payment_link: true,
       return_url: 'https://agencyiaos.com'
     };
@@ -112,7 +99,7 @@ app.post('/api/crear-factura', async (req, res) => {
       throw new Error(`Respuesta inválida de Checkout (${response.status}): ${rawText.slice(0, 100)}`);
     }
 
-    if (!response.ok) throw new Error(data.message || 'Error creando checkout');
+    if (!response.ok) throw new Error(data.message || data.error || 'Error creando checkout');
 
     return res.status(200).json({
       exito: true,
