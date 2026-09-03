@@ -17,7 +17,7 @@ const DODO_API_KEY = process.env.DODO_PAYMENTS_API_KEY || '';
 const DODO_WEBHOOK_SECRET = process.env.DODO_WEBHOOK_SECRET || '';
 const DODO_API_URL = process.env.DODO_API_URL || 'https://test.dodopayments.com';
 
-// AUTO-APROVISIONAMIENTO: Payload estricto según especificación Dodo Payments MoR
+// AUTO-APROVISIONAMIENTO: Estructura exacta requerida por Dodo Payments
 async function autoCrearProductoDodo(concepto, monto) {
   const payload = {
     name: concepto || 'Servicio Automatizado Holding',
@@ -27,7 +27,7 @@ async function autoCrearProductoDodo(concepto, monto) {
       discount: 0,
       price: Math.round(monto * 100)
     },
-    tax_category: 'digital_goods'
+    tax_category: 'digital_products'
   };
 
   const res = await fetch(`${DODO_API_URL}/products`, {
