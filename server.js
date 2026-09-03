@@ -17,7 +17,7 @@ const DODO_API_KEY = process.env.DODO_PAYMENTS_API_KEY || '';
 const DODO_WEBHOOK_SECRET = process.env.DODO_WEBHOOK_SECRET || '';
 const DODO_API_URL = process.env.DODO_API_URL || 'https://test.dodopayments.com';
 
-// AUTO-APROVISIONAMIENTO: Crea productos en Dodo al vuelo sin intervención humana
+// AUTO-APROVISIONAMIENTO: Estructura exacta requerida por Dodo Payments
 async function autoCrearProductoDodo(concepto, monto) {
   const res = await fetch(`${DODO_API_URL}/products`, {
     method: 'POST',
@@ -28,10 +28,24 @@ async function autoCrearProductoDodo(concepto, monto) {
     },
     body: JSON.stringify({
       name: concepto || 'Servicio Automatizado Holding',
-      price: Math.round(monto * 100),
-      type: 'one_time',
-      currency: 'USD'
+      price: {
+        currency: 'USD',
+        discount: 0,
+        price: Math.round(monto * 100)
+      },
+      tax_category: 'digital_goods'
     })
+  });
+
+  const raw = await res.text();
+  let data;
+  try { data = JSON.parse(raw); } catch (e) {
+    throw new Error(`Error creando producto: ${raw.slice(0, 100)}`);
+  }
+
+  if (!res.ok) throw new Error(data.message || data.error || 'No se pudo crear el producto');
+  return data.product_id || data.id;
+})
   });
 
   const raw = await res.text();
@@ -72,13 +86,12 @@ app.post('/api/crear-factura', async (req, res) => {
         email: clienteEmail,
         name: clienteNombre || 'Cliente Holding'
       },
-      product_cart: [
-        {
-          product_id: idProductoFinal,
-          quantity: 1,
-          amount: Math.round(monto * 100)
-        }
-      ],
+  product_cart: [
+  {
+    product_id: idProductoFinal,
+    quantity: 1
+  }
+],
       payment_link: true,
       return_url: 'https://agencyiaos.com'
     };
