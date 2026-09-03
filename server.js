@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const app = express();
 app.use(express.json());
 
-// Permite peticiones desde cualquier origen
+// Configuración CORS para cualquier origen
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
@@ -17,8 +17,16 @@ const DODO_API_KEY = process.env.DODO_PAYMENTS_API_KEY || '';
 const DODO_WEBHOOK_SECRET = process.env.DODO_WEBHOOK_SECRET || '';
 const DODO_API_URL = process.env.DODO_API_URL || 'https://test.dodopayments.com';
 
-// AUTO-APROVISIONAMIENTO: Formato estricto para la API de Dodo Payments
+// AUTO-APROVISIONAMIENTO: Estructura exacta y limpia exigida por Dodo Payments
 async function autoCrearProductoDodo(concepto, monto) {
+  const payload = {
+    name: concepto || 'Servicio Automatizado Holding',
+    description: 'Producto generado dinámicamente por Holding IA',
+    price: Math.round(monto * 100),
+    currency: 'USD',
+    type: 'one_time'
+  };
+
   const res = await fetch(`${DODO_API_URL}/products`, {
     method: 'POST',
     headers: {
@@ -26,22 +34,21 @@ async function autoCrearProductoDodo(concepto, monto) {
       'Content-Type': 'application/json',
       'User-Agent': 'Mozilla/5.0'
     },
-    body: JSON.stringify({
-      name: concepto || 'Servicio Automatizado Holding',
-      type: 'one_time',
-      price: Math.round(monto * 100),
-      currency: 'USD',
-      tax_category: 'digital_goods'
-    })
+    body: JSON.stringify(payload)
   });
 
-  const raw = await res.text();
+  const rawText = await res.text();
   let data;
-  try { data = JSON.parse(raw); } catch (e) {
-    throw new Error(`Error parseando respuesta de Dodo: ${raw.slice(0, 100)}`);
+  try { 
+    data = JSON.parse(rawText); 
+  } catch (e) {
+    throw new Error(`[Paso Producto] Respuesta inválida de Dodo (${res.status}): ${rawText.slice(0, 100)}`);
   }
 
-  if (!res.ok) throw new Error(data.message || data.error || 'No se pudo crear el producto');
+  if (!res.ok) {
+    throw new Error(`[Paso Producto] Error ${res.status}: ${data.message || data.error || JSON.stringify(data)}`);
+  }
+
   return data.product_id || data.id;
 }
 
@@ -59,14 +66,7 @@ app.post('/api/crear-factura', async (req, res) => {
       idProductoFinal = await autoCrearProductoDodo(concepto || 'Factura Automática Holding', monto);
     }
 
-    const payload = {
-      billing: {
-        city: 'Cali',
-        country: 'CO',
-        state: 'Valle del Cauca',
-        street: 'Calle Principal',
-        zipcode: '760001'
-      },
+    const payloadCheckout = {
       customer: {
         email: clienteEmail,
         name: clienteNombre || 'Cliente Holding'
@@ -88,16 +88,20 @@ app.post('/api/crear-factura', async (req, res) => {
         'Content-Type': 'application/json',
         'User-Agent': 'Mozilla/5.0'
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payloadCheckout)
     });
 
     const rawText = await response.text();
     let data;
-    try { data = JSON.parse(rawText); } catch (e) {
-      throw new Error(`Respuesta inválida de Checkout (${response.status}): ${rawText.slice(0, 100)}`);
+    try { 
+      data = JSON.parse(rawText); 
+    } catch (e) {
+      throw new Error(`[Paso Checkout] Respuesta inválida (${response.status}): ${rawText.slice(0, 100)}`);
     }
 
-    if (!response.ok) throw new Error(data.message || data.error || 'Error creando checkout');
+    if (!response.ok) {
+      throw new Error(`[Paso Checkout] Error ${response.status}: ${data.message || data.error || JSON.stringify(data)}`);
+    }
 
     return res.status(200).json({
       exito: true,
@@ -110,7 +114,7 @@ app.post('/api/crear-factura', async (req, res) => {
   }
 });
 
-// Panel de control web autónomo para pruebas
+// Panel de control web autónomo para tests
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -164,7 +168,7 @@ app.get('/', (req, res) => {
   `);
 });
 
-// Listener de Webhooks
+// Webhook listener
 app.post('/webhook/dodo', (req, res) => {
   const signature = req.headers['x-dodo-signature'];
 
