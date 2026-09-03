@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const app = express();
 app.use(express.json());
 
-// Configuración CORS para cualquier origen
+// CORS para permitir peticiones desde cualquier origen
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
@@ -17,14 +17,17 @@ const DODO_API_KEY = process.env.DODO_PAYMENTS_API_KEY || '';
 const DODO_WEBHOOK_SECRET = process.env.DODO_WEBHOOK_SECRET || '';
 const DODO_API_URL = process.env.DODO_API_URL || 'https://test.dodopayments.com';
 
-// AUTO-APROVISIONAMIENTO: Estructura exacta y limpia exigida por Dodo Payments
+// AUTO-APROVISIONAMIENTO: Payload estricto según especificación Dodo Payments MoR
 async function autoCrearProductoDodo(concepto, monto) {
   const payload = {
     name: concepto || 'Servicio Automatizado Holding',
-    description: 'Producto generado dinámicamente por Holding IA',
-    price: Math.round(monto * 100),
-    currency: 'USD',
-    type: 'one_time'
+    description: 'Producto auto-generado por Holding IA',
+    price: {
+      currency: 'USD',
+      discount: 0,
+      price: Math.round(monto * 100)
+    },
+    tax_category: 'digital_goods'
   };
 
   const res = await fetch(`${DODO_API_URL}/products`, {
@@ -39,14 +42,14 @@ async function autoCrearProductoDodo(concepto, monto) {
 
   const rawText = await res.text();
   let data;
-  try { 
-    data = JSON.parse(rawText); 
+  try {
+    data = JSON.parse(rawText);
   } catch (e) {
-    throw new Error(`[Paso Producto] Respuesta inválida de Dodo (${res.status}): ${rawText.slice(0, 100)}`);
+    throw new Error(`Error parsing producto Dodo (${res.status}): ${rawText}`);
   }
 
   if (!res.ok) {
-    throw new Error(`[Paso Producto] Error ${res.status}: ${data.message || data.error || JSON.stringify(data)}`);
+    throw new Error(`Error creando producto (${res.status}): ${JSON.stringify(data)}`);
   }
 
   return data.product_id || data.id;
@@ -93,14 +96,14 @@ app.post('/api/crear-factura', async (req, res) => {
 
     const rawText = await response.text();
     let data;
-    try { 
-      data = JSON.parse(rawText); 
+    try {
+      data = JSON.parse(rawText);
     } catch (e) {
-      throw new Error(`[Paso Checkout] Respuesta inválida (${response.status}): ${rawText.slice(0, 100)}`);
+      throw new Error(`Error checkout (${response.status}): ${rawText}`);
     }
 
     if (!response.ok) {
-      throw new Error(`[Paso Checkout] Error ${response.status}: ${data.message || data.error || JSON.stringify(data)}`);
+      throw new Error(`Error checkout (${response.status}): ${JSON.stringify(data)}`);
     }
 
     return res.status(200).json({
@@ -114,7 +117,7 @@ app.post('/api/crear-factura', async (req, res) => {
   }
 });
 
-// Panel de control web autónomo para tests
+// Panel de prueba visual
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -168,7 +171,6 @@ app.get('/', (req, res) => {
   `);
 });
 
-// Webhook listener
 app.post('/webhook/dodo', (req, res) => {
   const signature = req.headers['x-dodo-signature'];
 
