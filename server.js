@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const app = express();
 app.use(express.json());
 
-// Permite peticiones desde cualquier origen (Holding, bots, cronjobs)
+// Permite peticiones desde cualquier origen
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
@@ -17,7 +17,7 @@ const DODO_API_KEY = process.env.DODO_PAYMENTS_API_KEY || '';
 const DODO_WEBHOOK_SECRET = process.env.DODO_WEBHOOK_SECRET || '';
 const DODO_API_URL = process.env.DODO_API_URL || 'https://test.dodopayments.com';
 
-// AUTO-APROVISIONAMIENTO: Estructura exacta requerida por Dodo Payments
+// AUTO-APROVISIONAMIENTO: Formato estricto para la API de Dodo Payments
 async function autoCrearProductoDodo(concepto, monto) {
   const res = await fetch(`${DODO_API_URL}/products`, {
     method: 'POST',
@@ -28,11 +28,9 @@ async function autoCrearProductoDodo(concepto, monto) {
     },
     body: JSON.stringify({
       name: concepto || 'Servicio Automatizado Holding',
-      price: {
-        currency: 'USD',
-        discount: 0,
-        price: Math.round(monto * 100)
-      },
+      type: 'one_time',
+      price: Math.round(monto * 100),
+      currency: 'USD',
       tax_category: 'digital_goods'
     })
   });
@@ -40,7 +38,7 @@ async function autoCrearProductoDodo(concepto, monto) {
   const raw = await res.text();
   let data;
   try { data = JSON.parse(raw); } catch (e) {
-    throw new Error(`Error creando producto: ${raw.slice(0, 100)}`);
+    throw new Error(`Error parseando respuesta de Dodo: ${raw.slice(0, 100)}`);
   }
 
   if (!res.ok) throw new Error(data.message || data.error || 'No se pudo crear el producto');
@@ -112,7 +110,7 @@ app.post('/api/crear-factura', async (req, res) => {
   }
 });
 
-// Panel de control web autónomo para tests
+// Panel de control web autónomo para pruebas
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -166,7 +164,7 @@ app.get('/', (req, res) => {
   `);
 });
 
-// Listener de Webhooks para que la Holding procese la confirmación
+// Listener de Webhooks
 app.post('/webhook/dodo', (req, res) => {
   const signature = req.headers['x-dodo-signature'];
 
