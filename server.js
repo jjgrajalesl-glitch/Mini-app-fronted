@@ -17,15 +17,14 @@ const DODO_API_KEY = process.env.DODO_PAYMENTS_API_KEY || '';
 const DODO_WEBHOOK_SECRET = process.env.DODO_WEBHOOK_SECRET || '';
 const DODO_API_URL = process.env.DODO_API_URL || 'https://test.dodopayments.com';
 
-// AUTO-APROVISIONAMIENTO: Estructura exacta con 'type' dentro del objeto 'price'
+// AUTO-APROVISIONAMIENTO: Variantes exactas requeridas por la API de Dodo Payments
 async function autoCrearProductoDodo(concepto, monto) {
   const payload = {
     name: concepto || 'Servicio Automatizado Holding',
     description: 'Producto auto-generado por Holding IA',
-    type: 'one_time',
     tax_category: 'digital_products',
     price: {
-      type: 'one_time',
+      type: 'one_time_price',
       currency: 'USD',
       discount: 0,
       price: Math.round(monto * 100)
