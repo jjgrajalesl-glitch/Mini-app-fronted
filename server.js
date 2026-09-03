@@ -17,17 +17,18 @@ const DODO_API_KEY = process.env.DODO_PAYMENTS_API_KEY || '';
 const DODO_WEBHOOK_SECRET = process.env.DODO_WEBHOOK_SECRET || '';
 const DODO_API_URL = process.env.DODO_API_URL || 'https://test.dodopayments.com';
 
-// AUTO-APROVISIONAMIENTO: Estructura exacta requerida por Dodo Payments
+// AUTO-APROVISIONAMIENTO: Payload completo con 'type' y 'tax_category' requeridos por Dodo
 async function autoCrearProductoDodo(concepto, monto) {
   const payload = {
     name: concepto || 'Servicio Automatizado Holding',
     description: 'Producto auto-generado por Holding IA',
+    type: 'one_time',
+    tax_category: 'digital_products',
     price: {
       currency: 'USD',
       discount: 0,
       price: Math.round(monto * 100)
-    },
-    tax_category: 'digital_products'
+    }
   };
 
   const res = await fetch(`${DODO_API_URL}/products`, {
@@ -45,11 +46,11 @@ async function autoCrearProductoDodo(concepto, monto) {
   try {
     data = JSON.parse(rawText);
   } catch (e) {
-    throw new Error(`Error parsing producto Dodo (${res.status}): ${rawText}`);
+    throw new Error(`Error parsing respuesta Dodo (${res.status}): ${rawText}`);
   }
 
   if (!res.ok) {
-    throw new Error(`Error creando producto (${res.status}): ${JSON.stringify(data)}`);
+    throw new Error(`Error creando producto (${res.status}): ${data.message || data.error || JSON.stringify(data)}`);
   }
 
   return data.product_id || data.id;
@@ -103,7 +104,7 @@ app.post('/api/crear-factura', async (req, res) => {
     }
 
     if (!response.ok) {
-      throw new Error(`Error checkout (${response.status}): ${JSON.stringify(data)}`);
+      throw new Error(`Error checkout (${response.status}): ${data.message || data.error || JSON.stringify(data)}`);
     }
 
     return res.status(200).json({
@@ -117,7 +118,7 @@ app.post('/api/crear-factura', async (req, res) => {
   }
 });
 
-// Panel de prueba visual
+// Panel de prueba web
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -129,7 +130,7 @@ app.get('/', (req, res) => {
         body { font-family: system-ui, sans-serif; padding: 40px; background: #0f172a; color: #fff; text-align: center; }
         .card { background: #1e293b; padding: 30px; border-radius: 12px; max-width: 500px; margin: 0 auto; }
         button { background: #6366f1; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        #result { margin-top: 20px; text-align: left; background: #0f172a; padding: 15px; border-radius: 8px; font-size: 13px; overflow-x: auto; }
+        #result { margin-top: 20px; text-align: left; background: #0f172a; padding: 15px; border-radius: 8px; font-size: 13px; white-space: pre-wrap; word-break: break-all; }
         a.pay-btn { display: inline-block; margin-top: 15px; background: #22c55e; color: white; text-decoration: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; }
       </style>
     </head>
@@ -171,6 +172,7 @@ app.get('/', (req, res) => {
   `);
 });
 
+// Webhook listener
 app.post('/webhook/dodo', (req, res) => {
   const signature = req.headers['x-dodo-signature'];
 
