@@ -56,10 +56,10 @@ async function autoCrearProductoDodo(concepto, monto) {
   return data.product_id || data.id;
 }
 
-// Endpoint Principal de Facturación con Idioma Dinámico (Dodo Payments)
+// Endpoint Principal de Facturación
 app.post('/api/crear-factura', async (req, res) => {
   try {
-    const { clienteEmail, clienteNombre, monto, productoId, concepto, lang } = req.body;
+    const { clienteEmail, clienteNombre, monto, productoId, concepto } = req.body;
 
     if (!clienteEmail || !monto) {
       return res.status(400).json({ error: 'clienteEmail y monto son obligatorios' });
@@ -107,18 +107,10 @@ app.post('/api/crear-factura', async (req, res) => {
       throw new Error(`Error checkout (${response.status}): ${data.message || data.error || JSON.stringify(data)}`);
     }
 
-    // Forzado dinámico de idioma en la URL final de Dodo Payments
-    let checkoutUrl = data.checkout_url || data.payment_link;
-    const targetLang = lang || 'es';
-    if (checkoutUrl) {
-      const separator = checkoutUrl.includes('?') ? '&' : '?';
-      checkoutUrl = `${checkoutUrl}${separator}locale=${targetLang}&lang=${targetLang}`;
-    }
-
     return res.status(200).json({
       exito: true,
       facturaId: data.payment_id || data.checkout_id,
-      urlPago: checkoutUrl
+      urlPago: data.checkout_url || data.payment_link
     });
 
   } catch (error) {
