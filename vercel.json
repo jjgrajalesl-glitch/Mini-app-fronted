@@ -4,12 +4,30 @@
     {
       "src": "server.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "api/growth-agent.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
+      "src": "/api/growth-agent",
+      "dest": "api/growth-agent.js"
+    },
+    {
       "src": "/(.*)",
       "dest": "server.js"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/growth-agent?mode=AM",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/growth-agent?mode=PM",
+      "schedule": "0 23 * * *"
     }
   ]
 }
