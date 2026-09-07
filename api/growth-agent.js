@@ -1,5 +1,4 @@
 module.exports = async function handler(req, res) {
-  // Asegurar cabeceras de respuesta JSON
   res.setHeader('Content-Type', 'application/json');
 
   try {
@@ -8,11 +7,11 @@ module.exports = async function handler(req, res) {
     if (!mode || (mode !== 'AM' && mode !== 'PM')) {
       return res.status(400).json({ 
         success: false, 
-        message: "Por favor especifica un modo válido en la URL: ?mode=AM o ?mode=PM" 
+        message: "Especifica un modo válido: ?mode=AM o ?mode=PM" 
       });
     }
 
-    // --- RUTINA AM (08:00 AM): Creación y Difusión Viral ---
+    // --- RUTINA AM (08:00 AM) ---
     if (mode === 'AM') {
       const prompt = `
         Crea 3 variaciones de guion de video (30s) para Agency AI OS en tres idiomas específicos:
@@ -34,8 +33,8 @@ module.exports = async function handler(req, res) {
       `;
 
       let script = "Guion base automatizado para Agency AI OS.";
-
       const geminiKey = process.env.GEMINI_KEY;
+
       if (geminiKey) {
         try {
           const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
@@ -48,11 +47,10 @@ module.exports = async function handler(req, res) {
             script = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || script;
           }
         } catch (e) {
-          console.error("Error al llamar Gemini:", e.message);
+          console.error("Error Gemini:", e.message);
         }
       }
 
-      // Disparar renderizado en Google Cloud Workflow
       const workflowUrl = process.env.GOOGLE_WORKFLOW_URL;
       if (workflowUrl && workflowUrl.startsWith('http')) {
         try {
@@ -74,26 +72,24 @@ module.exports = async function handler(req, res) {
             })
           });
         } catch (e) {
-          console.error("Error enviando orden a Google Workflow:", e.message);
+          console.error("Error Google Workflow:", e.message);
         }
       }
 
       return res.status(200).json({ 
         success: true, 
         mode: 'AM', 
-        message: "Rutina matutina ejecutada correctamente",
         script_generated: script 
       });
     }
 
-    // --- RUTINA PM (06:00 PM): Medición y Reporte en Telegram ---
+    // --- RUTINA PM (06:00 PM) ---
     if (mode === 'PM') {
       const today = new Date().toISOString().split('T')[0];
       let newSignups = 0;
       let trialsActive = 0;
       let conversions = 0;
 
-      // Sanitizar URL de Supabase
       let rawSupabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
       const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
@@ -125,11 +121,10 @@ module.exports = async function handler(req, res) {
             }
           }
         } catch (e) {
-          console.error("Error consultando Supabase REST:", e.message);
+          console.error("Error Supabase:", e.message);
         }
       }
 
-      // Sanitizar token y Chat ID de Telegram
       let telegramToken = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN || "";
       let telegramChatId = process.env.TELEGRAM_CHAT_ID || "";
 
@@ -153,7 +148,11 @@ Atracción automatizada ejecutada. Saldo gastado en la app derivando al muro de 
       `;
 
       let telegramSent = false;
-      if (telegramToken && telegramChatId) {
+      let telegramError = null;
+
+      if (!telegramToken || !telegramChatId) {
+        telegramError = "Faltan variables en Vercel: asegúrate de tener TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID agregadas.";
+      } else {
         try {
           const telegramRes = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
             method: 'POST',
@@ -164,11 +163,15 @@ Atracción automatizada ejecutada. Saldo gastado en la app derivando al muro de 
               parse_mode: 'Markdown'
             })
           });
-          if (telegramRes.ok) {
+
+          const tgData = await telegramRes.json();
+          if (telegramRes.ok && tgData.ok) {
             telegramSent = true;
+          } else {
+            telegramError = tgData.description || "Error de autenticación con Telegram API";
           }
         } catch (e) {
-          console.error("Error enviando mensaje a Telegram:", e.message);
+          telegramError = e.message;
         }
       }
 
@@ -176,6 +179,7 @@ Atracción automatizada ejecutada. Saldo gastado en la app derivando al muro de 
         success: true, 
         mode: 'PM', 
         telegram_sent: telegramSent,
+        telegram_diagnostic: telegramError || "Mensaje enviado exitosamente a Telegram",
         metrics: { newSignups, trialsActive, conversions } 
       });
     }
@@ -183,7 +187,7 @@ Atracción automatizada ejecutada. Saldo gastado en la app derivando al muro de 
   } catch (err) {
     return res.status(200).json({ 
       success: false, 
-      error: err.message || "Error interno procesado" 
+      error: err.message || "Error procesado" 
     });
   }
 };
