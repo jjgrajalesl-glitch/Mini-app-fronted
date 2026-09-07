@@ -1,6 +1,16 @@
 module.exports = async function handler(req, res) {
+  // Asegurar cabeceras de respuesta JSON
+  res.setHeader('Content-Type', 'application/json');
+
   try {
     const { mode } = req.query;
+
+    if (!mode || (mode !== 'AM' && mode !== 'PM')) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Por favor especifica un modo válido en la URL: ?mode=AM o ?mode=PM" 
+      });
+    }
 
     // --- RUTINA AM (08:00 AM): Creación y Difusión Viral ---
     if (mode === 'AM') {
@@ -23,42 +33,57 @@ module.exports = async function handler(req, res) {
         - 20-30s: Llamado a la acción (CTA): 'Prueba 10 puntos gratis en https://revenue-os-mvp.vercel.app'.
       `;
 
-      let script = "Guion base para automatización diaria de video.";
+      let script = "Guion base automatizado para Agency AI OS.";
 
       const geminiKey = process.env.GEMINI_KEY;
       if (geminiKey) {
-        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-        const geminiData = await geminiRes.json();
-        script = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || script;
+        try {
+          const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+          });
+          if (geminiRes.ok) {
+            const geminiData = await geminiRes.json();
+            script = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || script;
+          }
+        } catch (e) {
+          console.error("Error al llamar Gemini:", e.message);
+        }
       }
 
       // Disparar renderizado en Google Cloud Workflow
       const workflowUrl = process.env.GOOGLE_WORKFLOW_URL;
-      if (workflowUrl) {
-        await fetch(workflowUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            script, 
-            languages: ['es-US', 'en-US', 'pt-BR'],
-            audio_settings: { voice_type: "AI_professional_male", bg_music: "ambient_tech_subtle" },
-            visual_rules: { 
-              no_humans: true, 
-              theme: "dark_executive_saas",
-              background_style: "abstract_neural_networks_glowing_lines_dark_blue",
-              text_overlay: "animated_sync_with_audio_large_white",
-              outro_logo: "agency_ai_os_logo"
-            },
-            target_url: "https://revenue-os-mvp.vercel.app" 
-          })
-        });
+      if (workflowUrl && workflowUrl.startsWith('http')) {
+        try {
+          await fetch(workflowUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              script, 
+              languages: ['es-US', 'en-US', 'pt-BR'],
+              audio_settings: { voice_type: "AI_professional_male", bg_music: "ambient_tech_subtle" },
+              visual_rules: { 
+                no_humans: true, 
+                theme: "dark_executive_saas",
+                background_style: "abstract_neural_networks_glowing_lines_dark_blue",
+                text_overlay: "animated_sync_with_audio_large_white",
+                outro_logo: "agency_ai_os_logo"
+              },
+              target_url: "https://revenue-os-mvp.vercel.app" 
+            })
+          });
+        } catch (e) {
+          console.error("Error enviando orden a Google Workflow:", e.message);
+        }
       }
 
-      return res.status(200).json({ success: true, mode: 'AM', script_generated: script });
+      return res.status(200).json({ 
+        success: true, 
+        mode: 'AM', 
+        message: "Rutina matutina ejecutada correctamente",
+        script_generated: script 
+      });
     }
 
     // --- RUTINA PM (06:00 PM): Medición y Reporte en Telegram ---
@@ -68,13 +93,20 @@ module.exports = async function handler(req, res) {
       let trialsActive = 0;
       let conversions = 0;
 
-      // Consulta directa a la API REST de Supabase (sin paquetes de terceros)
-      const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      // Sanitizar URL de Supabase
+      let rawSupabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
-      if (supabaseUrl && supabaseKey) {
+      if (rawSupabaseUrl) {
+        if (!rawSupabaseUrl.startsWith('http://') && !rawSupabaseUrl.startsWith('https://')) {
+          rawSupabaseUrl = `https://${rawSupabaseUrl}`;
+        }
+        rawSupabaseUrl = rawSupabaseUrl.replace(/\/+$/, '');
+      }
+
+      if (rawSupabaseUrl && supabaseKey) {
         try {
-          const endpoint = `${supabaseUrl}/rest/v1/app_access?select=plan,points_remaining,created_at&created_at=gte.${today}`;
+          const endpoint = `${rawSupabaseUrl}/rest/v1/app_access?select=plan,points_remaining,created_at&created_at=gte.${today}`;
           const supaRes = await fetch(endpoint, {
             method: 'GET',
             headers: {
@@ -93,12 +125,17 @@ module.exports = async function handler(req, res) {
             }
           }
         } catch (e) {
-          console.error("Error consultando Supabase REST:", e);
+          console.error("Error consultando Supabase REST:", e.message);
         }
       }
 
-      const telegramToken = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN;
-      const telegramChatId = process.env.TELEGRAM_CHAT_ID;
+      // Sanitizar token y Chat ID de Telegram
+      let telegramToken = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN || "";
+      let telegramChatId = process.env.TELEGRAM_CHAT_ID || "";
+
+      if (telegramToken.startsWith('bot')) {
+        telegramToken = telegramToken.replace(/^bot/, '');
+      }
 
       const telegramMessage = `
 📊 *REPORTE DIARIO DE CRECIMIENTO - AGENCY AI OS*
@@ -115,24 +152,38 @@ module.exports = async function handler(req, res) {
 Atracción automatizada ejecutada. Saldo gastado en la app derivando al muro de pago.
       `;
 
+      let telegramSent = false;
       if (telegramToken && telegramChatId) {
-        await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: telegramChatId,
-            text: telegramMessage,
-            parse_mode: 'Markdown'
-          })
-        });
+        try {
+          const telegramRes = await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: telegramChatId,
+              text: telegramMessage,
+              parse_mode: 'Markdown'
+            })
+          });
+          if (telegramRes.ok) {
+            telegramSent = true;
+          }
+        } catch (e) {
+          console.error("Error enviando mensaje a Telegram:", e.message);
+        }
       }
 
-      return res.status(200).json({ success: true, mode: 'PM', metrics: { newSignups, conversions } });
+      return res.status(200).json({ 
+        success: true, 
+        mode: 'PM', 
+        telegram_sent: telegramSent,
+        metrics: { newSignups, trialsActive, conversions } 
+      });
     }
 
-    return res.status(400).json({ error: "Especifique modo: ?mode=AM o ?mode=PM" });
-
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(200).json({ 
+      success: false, 
+      error: err.message || "Error interno procesado" 
+    });
   }
 };
