@@ -1,17 +1,6 @@
-const { createClient } = require('@supabase/supabase-js');
-
 module.exports = async function handler(req, res) {
   try {
     const { mode } = req.query;
-
-    // Conexión segura a Supabase
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-    
-    let supabase = null;
-    if (supabaseUrl && supabaseKey) {
-      supabase = createClient(supabaseUrl, supabaseKey);
-    }
 
     // --- RUTINA AM (08:00 AM): Creación y Difusión Viral ---
     if (mode === 'AM') {
@@ -36,8 +25,9 @@ module.exports = async function handler(req, res) {
 
       let script = "Guion base para automatización diaria de video.";
 
-      if (process.env.GEMINI_KEY) {
-        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_KEY}`, {
+      const geminiKey = process.env.GEMINI_KEY;
+      if (geminiKey) {
+        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
@@ -47,8 +37,9 @@ module.exports = async function handler(req, res) {
       }
 
       // Disparar renderizado en Google Cloud Workflow
-      if (process.env.GOOGLE_WORKFLOW_URL) {
-        await fetch(process.env.GOOGLE_WORKFLOW_URL, {
+      const workflowUrl = process.env.GOOGLE_WORKFLOW_URL;
+      if (workflowUrl) {
+        await fetch(workflowUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -77,16 +68,32 @@ module.exports = async function handler(req, res) {
       let trialsActive = 0;
       let conversions = 0;
 
-      if (supabase) {
-        const { data: users } = await supabase
-          .from('app_access')
-          .select('plan, points_remaining, created_at')
-          .gte('created_at', today);
+      // Consulta directa a la API REST de Supabase (sin paquetes de terceros)
+      const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-        if (users) {
-          newSignups = users.length;
-          trialsActive = users.filter(u => u.plan === 'trial').length;
-          conversions = users.filter(u => u.plan !== 'trial').length;
+      if (supabaseUrl && supabaseKey) {
+        try {
+          const endpoint = `${supabaseUrl}/rest/v1/app_access?select=plan,points_remaining,created_at&created_at=gte.${today}`;
+          const supaRes = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (supaRes.ok) {
+            const users = await supaRes.json();
+            if (Array.isArray(users)) {
+              newSignups = users.length;
+              trialsActive = users.filter(u => u.plan === 'trial').length;
+              conversions = users.filter(u => u.plan !== 'trial').length;
+            }
+          }
+        } catch (e) {
+          console.error("Error consultando Supabase REST:", e);
         }
       }
 
