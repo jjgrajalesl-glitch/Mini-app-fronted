@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     const geminiData = await geminiRes.json();
     const script = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-    // Disparar renderizado en Google Cloud Workflow
+   // Disparar renderizado en Google Cloud Workflow
     if (process.env.GOOGLE_WORKFLOW_URL) {
       await fetch(process.env.GOOGLE_WORKFLOW_URL, {
         method: 'POST',
@@ -41,15 +41,22 @@ export default async function handler(req, res) {
         body: JSON.stringify({ 
           script, 
           languages: ['es-US', 'en-US', 'pt-BR'],
-          visual_rules: { no_humans: true, theme: 'dark_executive_saas' },
+          audio_settings: {
+            voice_type: "AI_professional_male", // Voz sintética estilo documental tech
+            bg_music: "ambient_tech_subtle" // Música de fondo idéntica al video
+          },
+          visual_rules: { 
+            no_humans: true, 
+            theme: "dark_executive_saas",
+            background_style: "abstract_neural_networks_glowing_lines_dark_blue", // El estilo exacto de las líneas conectadas
+            text_overlay: "animated_sync_with_audio_large_white", // Textos grandes sincronizados con la voz
+            outro_logo: "agency_ai_os_logo" // Cierre con el logo de la marca
+          },
           target_url: "https://revenue-os-mvp.vercel.app" 
         })
       });
     }
-
-    return res.status(200).json({ success: true, mode: 'AM', script_generated: script });
-  }
-
+    
   // --- RUTINA PM (06:00 PM): Medición y Reporte en Telegram ---
   if (mode === 'PM') {
     const today = new Date().toISOString().split('T')[0];
