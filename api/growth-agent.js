@@ -8,14 +8,21 @@ export default async function handler(req, res) {
   // --- RUTINA AM (08:00 AM): Creación y Difusión Viral ---
   if (mode === 'AM') {
     const prompt = `
-      Analiza las tendencias y ganchos (hooks) de mayor conversión y viralidad en TikTok, Reels y Shorts de SaaS/AI en Español, Inglés y Portugués.
-      Extrae los patrones de apertura de 3 segundos más eficientes y genera un guion de video de 30 segundos optimizado para Agency AI OS.
-      
-      Estructura obligatoria:
-      1. Gancho disruptivo (3s) basado en los mejores patrones trilingües.
-      2. Demostración del problema: Tiempo perdido haciendo prompts manuales.
-      3. Solución: Generar la Fórmula de 7 Pasos en 10 segundos.
-      4. Llamado a la acción (CTA): 'Prueba 10 puntos gratis en revenue-os-mvp.vercel.app'.
+      Crea 3 variaciones de guion de video (30s) para Agency AI OS en tres idiomas específicos:
+      1. Español EE. UU. (es-US)
+      2. Inglés EE. UU. (en-US)
+      3. Portugués Brasil (pt-BR)
+
+      REGLAS DE PRODUCCIÓN VISUAL (ESTRICTAS):
+      - CERO personas o figuras humanas en pantalla.
+      - Estilo: Sobrio, minimalista, ejecutivo SaaS con fondo oscuro y tonos azul/blanco.
+      - Elementos: Animaciones de la interfaz de Agency AI OS y gráficos vectoriales limpios.
+      - Identidad: Mantener el nombre y logo de Agency AI OS visible durante todo el video.
+
+      ESTRUCTURA DE CONTENIDO (30s):
+      - 0-3s: Gancho disruptivo sobre el tiempo perdido haciendo prompts a mano.
+      - 3-20s: Demostración rápida de la Fórmula de 7 Pasos generando resultados.
+      - 20-30s: Llamado a la acción (CTA): 'Prueba 10 puntos gratis en https://revenue-os-mvp.vercel.app'.
     `;
 
     const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_KEY}`, {
@@ -24,14 +31,19 @@ export default async function handler(req, res) {
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
     });
     const geminiData = await geminiRes.json();
-    const script = geminiData.candidates[0].content.parts[0].text;
+    const script = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     // Disparar renderizado en Google Cloud Workflow
     if (process.env.GOOGLE_WORKFLOW_URL) {
       await fetch(process.env.GOOGLE_WORKFLOW_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ script, target_url: "https://revenue-os-mvp.vercel.app" })
+        body: JSON.stringify({ 
+          script, 
+          languages: ['es-US', 'en-US', 'pt-BR'],
+          visual_rules: { no_humans: true, theme: 'dark_executive_saas' },
+          target_url: "https://revenue-os-mvp.vercel.app" 
+        })
       });
     }
 
@@ -58,13 +70,13 @@ export default async function handler(req, res) {
 📅 Fecha: ${today}
 
 🚀 *Métricas de Marketing:*
-• Tareas ejecutadas: Video Viral AM
+• Tareas ejecutadas: Video Viral AM (es-US, en-US, pt-BR)
 • Registros Nuevos: *${newSignups}*
 • Usuarios en Prueba (10 pts): *${trialsActive}*
 • Conversiones/Pagos (Hotmart): *${conversions}*
 
 📈 *Estado del Embudo:*
-Se entregaron los puntos iniciales y se midió el impacto de conversión en el muro de pago.
+Atracción automatizada ejecutada. Saldo gastado en la app derivando al muro de pago.
     `;
 
     // Enviar a Telegram
