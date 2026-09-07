@@ -13,11 +13,12 @@ export default async function handler(req, res) {
       2. Inglés EE. UU. (en-US)
       3. Portugués Brasil (pt-BR)
 
-      REGLAS DE PRODUCCIÓN VISUAL (ESTRICTAS):
+      REGLAS DE PRODUCCIÓN VISUAL Y AUDIO (ESTRICTAS):
       - CERO personas o figuras humanas en pantalla.
-      - Estilo: Sobrio, minimalista, ejecutivo SaaS con fondo oscuro y tonos azul/blanco.
-      - Elementos: Animaciones de la interfaz de Agency AI OS y gráficos vectoriales limpios.
-      - Identidad: Mantener el nombre y logo de Agency AI OS visible durante todo el video.
+      - Estilo visual: Redes neuronales abstractas, líneas cibernéticas brillantes y tono azul oscuro/negro.
+      - Texto en pantalla: Transcripción animada en letras grandes blancas sincronizadas con la voz.
+      - Identidad de marca: Nombre y logo de Agency AI OS presente en todo momento.
+      - Audio: Locución masculina sintética profesional y música de fondo ambiental estilo tech.
 
       ESTRUCTURA DE CONTENIDO (30s):
       - 0-3s: Gancho disruptivo sobre el tiempo perdido haciendo prompts a mano.
@@ -33,7 +34,7 @@ export default async function handler(req, res) {
     const geminiData = await geminiRes.json();
     const script = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-   // Disparar renderizado en Google Cloud Workflow
+    // Disparar renderizado en Google Cloud Workflow con estilo visual exacto
     if (process.env.GOOGLE_WORKFLOW_URL) {
       await fetch(process.env.GOOGLE_WORKFLOW_URL, {
         method: 'POST',
@@ -42,21 +43,24 @@ export default async function handler(req, res) {
           script, 
           languages: ['es-US', 'en-US', 'pt-BR'],
           audio_settings: {
-            voice_type: "AI_professional_male", // Voz sintética estilo documental tech
-            bg_music: "ambient_tech_subtle" // Música de fondo idéntica al video
+            voice_type: "AI_professional_male",
+            bg_music: "ambient_tech_subtle"
           },
           visual_rules: { 
             no_humans: true, 
             theme: "dark_executive_saas",
-            background_style: "abstract_neural_networks_glowing_lines_dark_blue", // El estilo exacto de las líneas conectadas
-            text_overlay: "animated_sync_with_audio_large_white", // Textos grandes sincronizados con la voz
-            outro_logo: "agency_ai_os_logo" // Cierre con el logo de la marca
+            background_style: "abstract_neural_networks_glowing_lines_dark_blue",
+            text_overlay: "animated_sync_with_audio_large_white",
+            outro_logo: "agency_ai_os_logo"
           },
           target_url: "https://revenue-os-mvp.vercel.app" 
         })
       });
     }
-    
+
+    return res.status(200).json({ success: true, mode: 'AM', script_generated: script });
+  }
+
   // --- RUTINA PM (06:00 PM): Medición y Reporte en Telegram ---
   if (mode === 'PM') {
     const today = new Date().toISOString().split('T')[0];
@@ -78,6 +82,7 @@ export default async function handler(req, res) {
 
 🚀 *Métricas de Marketing:*
 • Tareas ejecutadas: Video Viral AM (es-US, en-US, pt-BR)
+• Estilo: Redes Neuronales / Voz IA / Tipografía
 • Registros Nuevos: *${newSignups}*
 • Usuarios en Prueba (10 pts): *${trialsActive}*
 • Conversiones/Pagos (Hotmart): *${conversions}*
